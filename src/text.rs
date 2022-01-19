@@ -117,6 +117,58 @@ pub trait TextParser<I: Character, O>: Parser<I, O> {
     {
         whitespace().ignore_then(self).then_ignore(whitespace())
     }
+    /// Parse a pattern into any type that implements `FromStr`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// enum Greetings {
+    ///     Hello,
+    ///     Howdy,
+    ///     HeyThere
+    /// }
+    ///
+    /// impl FromStr for Greetings {
+    ///     type Err = &'static str;
+    ///
+    ///     fn from_str(s: &str) -> Self {
+    ///         match s {
+    ///             "hello" | "Hello" => Ok(Self::Hello),
+    ///             "howdy" | "Howdy" => Ok(Self::Howdy),
+    ///             "hey there" | "Hey There" => Ok(Self::HeyThere),
+    ///             _ => Err("Not a valid greeting")
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// # use chumsky::prelude::*;
+    /// assert_eq!(text::int(10).parse_into::<u8>().parse("90"), Ok(10));
+    /// assert_eq!(text::int(10).parse_into::<u16>().parse("344"), Ok(344));
+    /// assert_eq!(text::int(10).parse_into::<Greetings>().parse("Howdy"), Ok(Greetings::Howdy));
+    /// ```
+    fn parse_into<T: FromStr>(
+        self,
+    ) -> TryMap<Self, fn(O, <Self::Error as Error<I>>::Span) -> Result<T, Self::Error>, O>
+    where
+        Self: Sized,
+        O: Chain<I> + FromIterator<I> + AsRef<[u8]> + 'static,
+    {
+        TryMap(
+            self,
+            |f: O, span| {
+                let string = match std::str::from_utf8(f.as_ref()) {
+                    Ok(string) => string,
+                    Err(_) => return Err(Self::Error::expected_input_found(span, [None], None)),
+                };
+                if let Ok(int) = string.parse::<T>() {
+                    Ok(int)
+                } else {
+                    Err(Self::Error::expected_input_found(span, [None], None))
+                }
+            },
+            PhantomData,
+        )
+    }
 }
 
 impl<I: Character, O, P: Parser<I, O>> TextParser<I, O> for P {}
