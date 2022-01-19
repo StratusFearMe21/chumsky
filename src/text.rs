@@ -148,14 +148,18 @@ pub trait TextParser<I: Character, O>: Parser<I, O> {
     /// ```
     fn parse_into<T: FromStr>(
         self,
-    ) -> TryMap<Self, fn(O, <Self::Error as Error<I>>::Span) -> Result<T, Self::Error>, O>
+    ) -> TryMap<
+        Self,
+        fn(I::Collection, <Self::Error as Error<I>>::Span) -> Result<T, Self::Error>,
+        I::Collection,
+    >
     where
         Self: Sized,
-        O: Chain<I> + FromIterator<I> + AsRef<[u8]> + 'static,
+        I::Collection: AsRef<[u8]>,
     {
         TryMap(
             self,
-            |f: O, span| {
+            |f: I::Collection, span| {
                 let string = match std::str::from_utf8(f.as_ref()) {
                     Ok(string) => string,
                     Err(_) => return Err(Self::Error::expected_input_found(span, [None], None)),
